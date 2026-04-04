@@ -61,4 +61,16 @@ describe('CanvasPool', () => {
     const fresh = pool.acquire(100, 200);
     expect(fresh).not.toBe(canvas);
   });
+
+  it('ignores double release of same canvas', () => {
+    const canvas = pool.acquire(100, 100);
+    pool.release(canvas);
+    pool.release(canvas); // double release
+
+    // Pool should still only have 1 entry, not 2
+    const c1 = pool.acquire(100, 100);
+    const c2 = pool.acquire(100, 100);
+    expect(c1).toBe(canvas);     // first acquire returns pooled
+    expect(c2).not.toBe(canvas); // second acquire creates new (pool was size 1, not 2)
+  });
 });

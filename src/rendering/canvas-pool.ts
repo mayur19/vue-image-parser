@@ -7,7 +7,7 @@ interface PoolEntry {
   readonly canvas: HTMLCanvasElement;
   readonly width: number;
   readonly height: number;
-  lastUsed: number;
+  readonly lastUsed: number;
 }
 
 export class CanvasPool {
@@ -44,9 +44,12 @@ export class CanvasPool {
    * Evicts the oldest entry when the pool is at capacity.
    */
   release(canvas: HTMLCanvasElement): void {
+    // Guard against double-release of the same canvas
+    if (this.slots.some(e => e.canvas === canvas)) return;
+
     if (this.slots.length >= this.maxSlots) {
-      // Sort ascending by lastUsed so index 0 is oldest; remove it
-      this.slots = [...this.slots].sort((a, b) => a.lastUsed - b.lastUsed).slice(1);
+      // Entries are appended in order, so oldest is always at index 0
+      this.slots = this.slots.slice(1);
     }
 
     this.slots = [
