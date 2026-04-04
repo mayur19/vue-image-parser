@@ -6,6 +6,9 @@
 import type { DecodedImage } from '../types/image';
 import type { RenderOptions } from '../types/options';
 import { calculateFitDimensions } from './scaler';
+import { CanvasPool } from './canvas-pool';
+
+const tempCanvasPool = new CanvasPool(2);
 
 /**
  * Render a DecodedImage onto a Canvas element.
@@ -48,13 +51,12 @@ export function renderToCanvas(
 
   // For non-1:1 rendering, we need a temp canvas
   if (dims.width !== image.width || dims.height !== image.height) {
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = image.width;
-    tempCanvas.height = image.height;
+    const tempCanvas = tempCanvasPool.acquire(image.width, image.height);
     const tempCtx = tempCanvas.getContext('2d')!;
     tempCtx.putImageData(imageData, 0, 0);
 
     ctx.drawImage(tempCanvas, dims.x, dims.y, dims.width, dims.height);
+    tempCanvasPool.release(tempCanvas);
   } else {
     ctx.putImageData(imageData, dims.x, dims.y);
   }
