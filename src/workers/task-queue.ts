@@ -28,7 +28,10 @@ export interface PendingTask {
   resolve: (response: WorkerResponse) => void;
   reject: (error: Error) => void;
   signal?: AbortSignal;
-  /** Stored reference to the abort listener so it can be removed later. */
+  /**
+   * @internal
+   * Stored reference to the abort listener so it can be removed later.
+   */
   abortListener?: () => void;
   enqueuedAt: number;
 }
@@ -127,11 +130,13 @@ export class TaskQueue {
       const task = this.tasks[0];
       if (task.signal?.aborted) {
         this.tasks.shift();
+        // cleanupAbortListener is idempotent; the abort handler may have already cleaned up
         this.cleanupAbortListener(task);
         task.reject(new Error('Task aborted while in queue'));
         continue;
       }
       const next = this.tasks.shift()!;
+      // cleanupAbortListener is idempotent; the abort handler may have already cleaned up
       this.cleanupAbortListener(next);
       return next;
     }
