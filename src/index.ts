@@ -7,7 +7,7 @@
  */
 
 // ─── Core Functions ────────────────────────────────────────────
-export { loadImage, disposeEngine } from './engine/loader';
+export { loadImage, disposeEngine, warmup } from './engine/loader';
 export { renderImage } from './rendering/renderer';
 export { detectFormat, detectFormatFromBlob } from './detection/detect';
 

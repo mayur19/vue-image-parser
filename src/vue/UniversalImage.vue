@@ -9,7 +9,7 @@
 import { ref, watch, onMounted, onBeforeUnmount, toRef, computed } from 'vue';
 import { useImage } from './useImage';
 import { renderImage } from '../rendering/renderer';
-import { toDataURL } from '../rendering/bitmap-renderer';
+import { toBlobURL } from '../rendering/bitmap-renderer';
 import type { LoadOptions, RenderOptions } from '../types/options';
 import { isBrowser } from '../utils/ssr';
 
@@ -67,19 +67,36 @@ const loadOptions = computed<LoadOptions>(() => ({
 
 const { loading, decoded, error, format } = useImage(effectiveSource, loadOptions);
 
+let currentBlobUrl: string | null = null;
+
+function revokePreviousBlobUrl(): void {
+  if (currentBlobUrl) {
+    URL.revokeObjectURL(currentBlobUrl);
+    currentBlobUrl = null;
+  }
+}
+
 // When decoded, render to canvas or create img src
-watch(decoded, (image) => {
+watch(decoded, async (image) => {
   if (!image) {
+    revokePreviousBlobUrl();
     imgSrc.value = null;
     return;
   }
 
-  // Convert to data URL for <img> rendering
   try {
-    imgSrc.value = toDataURL(image);
-    emit('load', { format: format.value, width: image.width, height: image.height });
+    revokePreviousBlobUrl();
+    const blobUrl = await toBlobURL(image);
+    // Check if component is still showing the same image (avoid race)
+    if (decoded.value === image) {
+      currentBlobUrl = blobUrl;
+      imgSrc.value = blobUrl;
+      emit('load', { format: format.value, width: image.width, height: image.height });
+    } else {
+      URL.revokeObjectURL(blobUrl);
+    }
   } catch (err) {
-    // Fallback to canvas rendering if data URL fails
+    // Fallback to canvas rendering if blob URL fails
     if (canvasRef.value) {
       const renderOptions: RenderOptions = {
         fit: props.fit,
@@ -117,6 +134,10 @@ onMounted(() => {
   }
 
   onBeforeUnmount(() => observer.disconnect());
+});
+
+onBeforeUnmount(() => {
+  revokePreviousBlobUrl();
 });
 
 // Computed styles

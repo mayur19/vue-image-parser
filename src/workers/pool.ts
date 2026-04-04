@@ -6,6 +6,7 @@
  */
 
 import type { WorkerRequest, WorkerResponse, PooledWorker } from '../types/worker';
+import type { ImageFormat } from '../types/image';
 import { WorkerError } from '../errors/errors';
 import { ErrorCodes } from '../errors/codes';
 import { TaskQueue, TaskPriority } from './task-queue';
@@ -68,6 +69,27 @@ export class WorkerPool {
     }
 
     return this.queue.enqueue(request, priority, signal);
+  }
+
+  /**
+   * Pre-initialize codecs for the given formats.
+   * Sends init-codec messages to workers at low priority.
+   * Non-fatal — failures are silently ignored.
+   */
+  async warmup(formats: readonly ImageFormat[]): Promise<void> {
+    if (this.disposed || !hasWorkerSupport()) return;
+
+    const promises = formats.map((format) => {
+      const id = `warmup-${format}-${Date.now()}`;
+      return this.submit(
+        { type: 'init-codec', id, format },
+        TaskPriority.LOW,
+      ).catch(() => {
+        // Warmup failures are non-fatal
+      });
+    });
+
+    await Promise.all(promises);
   }
 
   /**
