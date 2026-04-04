@@ -139,24 +139,36 @@ describe('applyOrientation', () => {
     expect(colorEq(pixelAt(out, width, 3, 3), BLUE)).toBe(true);
   });
 
-  it('orientation 5: transpose (rotate 90° CW + flip horizontally)', () => {
+  it('orientation 5: transpose — all four corners', () => {
     const data = makeTestImage();
     const { data: out, width, height } = applyOrientation(data, 4, 4, 5);
     expect(width).toBe(4);
     expect(height).toBe(4);
-    // orientation 5 maps (x,y) → (y,x) in output space
-    // so top-left of output = original top-left (RED)
+    // orientation 5 maps (x,y) → (dstX=y, dstY=x) — a pure transpose
+    // top-left of output comes from source (0,0) = RED
     expect(colorEq(pixelAt(out, width, 0, 0), RED)).toBe(true);
+    // top-right of output comes from source (0,3) = BLUE
+    expect(colorEq(pixelAt(out, width, 3, 0), BLUE)).toBe(true);
+    // bottom-left of output comes from source (3,0) = GREEN
+    expect(colorEq(pixelAt(out, width, 0, 3), GREEN)).toBe(true);
+    // bottom-right of output comes from source (3,3) = WHITE
+    expect(colorEq(pixelAt(out, width, 3, 3), WHITE)).toBe(true);
   });
 
-  it('orientation 7: transpose CCW + flip horizontally', () => {
+  it('orientation 7: all four corners', () => {
     const data = makeTestImage();
     const { data: out, width, height } = applyOrientation(data, 4, 4, 7);
     expect(width).toBe(4);
     expect(height).toBe(4);
-    // orientation 7 maps (x,y) → (height-1-y, width-1-x) in output space
-    // top-left of output = original bottom-right (WHITE)
+    // orientation 7 maps (x,y) → (dstX=height-1-y, dstY=width-1-x)
+    // top-left of output comes from source (3,3) = WHITE
     expect(colorEq(pixelAt(out, width, 0, 0), WHITE)).toBe(true);
+    // top-right of output comes from source (3,0) = GREEN
+    expect(colorEq(pixelAt(out, width, 3, 0), GREEN)).toBe(true);
+    // bottom-left of output comes from source (0,3) = BLUE
+    expect(colorEq(pixelAt(out, width, 0, 3), BLUE)).toBe(true);
+    // bottom-right of output comes from source (0,0) = RED
+    expect(colorEq(pixelAt(out, width, 3, 3), RED)).toBe(true);
   });
 
   it('non-square image with orientation 6 swaps dimensions (6×4 → 4×6)', () => {
