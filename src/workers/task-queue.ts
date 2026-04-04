@@ -28,6 +28,8 @@ export interface PendingTask {
   resolve: (response: WorkerResponse) => void;
   reject: (error: Error) => void;
   signal?: AbortSignal;
+  /** Stored reference to the abort listener so it can be removed later. */
+  abortListener?: () => void;
   enqueuedAt: number;
 }
 
@@ -84,15 +86,18 @@ export class TaskQueue {
         return;
       }
 
-      // Listen for abort
+      // Listen for abort – store the listener reference so we can remove it later
       if (signal) {
-        signal.addEventListener('abort', () => {
+        const abortListener = () => {
+          this.cleanupAbortListener(task);
           const index = this.tasks.indexOf(task);
           if (index !== -1) {
             this.tasks.splice(index, 1);
             reject(new Error('Task aborted while in queue'));
           }
-        });
+        };
+        task.abortListener = abortListener;
+        signal.addEventListener('abort', abortListener);
       }
 
       // Insert in priority order (stable sort — new tasks of same priority go last)
@@ -122,10 +127,13 @@ export class TaskQueue {
       const task = this.tasks[0];
       if (task.signal?.aborted) {
         this.tasks.shift();
+        this.cleanupAbortListener(task);
         task.reject(new Error('Task aborted while in queue'));
         continue;
       }
-      return this.tasks.shift()!;
+      const next = this.tasks.shift()!;
+      this.cleanupAbortListener(next);
+      return next;
     }
 
     return null;
@@ -137,8 +145,19 @@ export class TaskQueue {
   clear(error?: Error): void {
     const msg = error ?? new Error('Task queue cleared');
     for (const task of this.tasks) {
+      this.cleanupAbortListener(task);
       task.reject(msg);
     }
     this.tasks.length = 0;
+  }
+
+  /**
+   * Remove the stored abort listener from the task's signal and clear the reference.
+   */
+  private cleanupAbortListener(task: PendingTask): void {
+    if (task.signal && task.abortListener) {
+      task.signal.removeEventListener('abort', task.abortListener);
+      task.abortListener = undefined;
+    }
   }
 }
