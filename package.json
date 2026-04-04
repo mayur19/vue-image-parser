@@ -1,0 +1,66 @@
+{
+  "name": "vue-image-parser",
+  "version": "0.1.0",
+  "description": "Universal image rendering engine for Vue — supports JPEG, PNG, WebP, GIF, HEIC, AVIF with WASM fallback and zero main-thread blocking",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./codecs/heic": {
+      "import": "./dist/codecs/heic/heic-codec.js",
+      "types": "./dist/codecs/heic/heic-codec.d.ts"
+    },
+    "./codecs/avif": {
+      "import": "./dist/codecs/avif/avif-codec.js",
+      "types": "./dist/codecs/avif/avif-codec.d.ts"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "build:lib": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "vue-tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "vue",
+    "image",
+    "heic",
+    "avif",
+    "webp",
+    "decoder",
+    "wasm",
+    "web-worker",
+    "vue3"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.4.0",
+    "vite-plugin-dts": "^3.9.0",
+    "vitest": "^1.6.0",
+    "vue": "^3.4.0",
+    "vue-tsc": "^2.0.0"
+  },
+  "dependencies": {
+    "libheif-js": "^1.18.0",
+    "@jsquash/avif": "^1.3.0"
+  }
+}
