@@ -43,6 +43,13 @@ export function renderToCanvas(
     ctx.fillRect(0, 0, width, height);
   }
 
+  // Fast path: if decoded image has a live ImageBitmap, use drawImage directly
+  if (image.bitmap) {
+    const dims = calculateFitDimensions(image.width, image.height, width, height, fit);
+    ctx.drawImage(image.bitmap, dims.x, dims.y, dims.width, dims.height);
+    return;
+  }
+
   // Create ImageData from decoded RGBA
   const imageData = new ImageData((image.data as any), image.width, image.height);
 
