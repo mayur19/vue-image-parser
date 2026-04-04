@@ -48,6 +48,12 @@ export interface DecodedImage {
   /** Whether this image was decoded natively or via WASM */
   readonly decodePath: 'native' | 'wasm';
   /**
+   * Optional live ImageBitmap from native decode path.
+   * When present, renderers can use drawImage(bitmap) for GPU-accelerated rendering
+   * instead of going through putImageData.
+   */
+  readonly bitmap?: ImageBitmap;
+  /**
    * Release internal pixel buffers and associated resources.
    * Must be called when the image is no longer needed.
    */
