@@ -152,6 +152,18 @@ export function disposeEngine(): void {
   nativeCodec = null;
 }
 
+/**
+ * Pre-initialize WASM codecs for the given formats.
+ * Call early (e.g., on app mount) to avoid cold-start latency on first decode.
+ * Non-fatal — if warmup fails, the first decode pays the init cost (current behavior).
+ */
+export async function warmup(formats: ImageFormat[]): Promise<void> {
+  if (!hasWorkerSupport()) return;
+
+  const pool = getWorkerPool();
+  await pool.warmup(formats);
+}
+
 // ─── Private Helpers ───────────────────────────────────────────
 
 /**
@@ -241,6 +253,7 @@ async function decodeViaWorker(
       id,
       buffer,
       format,
+      maxDimension: _options?.maxDimension,
     },
     TaskPriority.HIGH,
     signal,

@@ -12,6 +12,7 @@ import { detectFormat } from '../detection/detect';
 import { serializeError, toTransferable } from './protocol';
 import type { ImageFormat, DecodedImage } from '../types/image';
 import type { Codec, DecodeOptions } from '../types/codec';
+import { scaleDimensions } from '../rendering/scaler';
 
 // ─── Codec Registry (within worker context) ────────────────────
 
@@ -93,7 +94,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
 
   switch (request.type) {
     case 'decode':
-      await handleDecode(request.id, request.buffer, request.format, request.options);
+      await handleDecode(request.id, request.buffer, request.format, request.options, request.maxDimension);
       break;
 
     case 'init-codec':
@@ -114,6 +115,7 @@ async function handleDecode(
   buffer: ArrayBuffer,
   format: ImageFormat,
   options?: DecodeOptions,
+  maxDimension?: number,
 ): Promise<void> {
   try {
     // Re-detect format if Unknown (belt-and-suspenders)
@@ -135,7 +137,13 @@ async function handleDecode(
       return;
     }
 
-    const decoded: DecodedImage = await codec.decode(buffer, options);
+    let decoded: DecodedImage = await codec.decode(buffer, options);
+
+    // Post-decode downsample if maxDimension is set
+    if (maxDimension && (decoded.width > maxDimension || decoded.height > maxDimension)) {
+      decoded = downsampleInWorker(decoded, maxDimension);
+    }
+
     const { data: transferable, transfer } = toTransferable(decoded);
 
     // Use postMessage with transfer list for zero-copy
@@ -188,6 +196,43 @@ function handleDispose(): void {
  */
 function respond(response: WorkerResponse): void {
   self.postMessage(response);
+}
+
+/**
+ * Downsample a decoded image to fit within maxDimension using OffscreenCanvas.
+ * Falls back to the original image on failure.
+ */
+function downsampleInWorker(image: DecodedImage, maxDimension: number): DecodedImage {
+  const scaled = scaleDimensions(image.width, image.height, maxDimension);
+  if (scaled.scale >= 1) return image;
+
+  try {
+    const srcCanvas = new OffscreenCanvas(image.width, image.height);
+    const srcCtx = srcCanvas.getContext('2d')!;
+    srcCtx.putImageData(new ImageData(image.data as any, image.width, image.height), 0, 0);
+
+    const dstCanvas = new OffscreenCanvas(scaled.width, scaled.height);
+    const dstCtx = dstCanvas.getContext('2d')!;
+    dstCtx.drawImage(srcCanvas, 0, 0, scaled.width, scaled.height);
+
+    const downsampled = dstCtx.getImageData(0, 0, scaled.width, scaled.height);
+
+    let disposed = false;
+    return {
+      data: downsampled.data,
+      width: scaled.width,
+      height: scaled.height,
+      format: image.format,
+      orientation: image.orientation,
+      decodePath: image.decodePath,
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+      },
+    };
+  } catch {
+    return image; // Graceful fallback — return full-resolution
+  }
 }
 
 // Signal ready

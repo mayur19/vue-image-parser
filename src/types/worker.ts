@@ -24,6 +24,8 @@ export interface WorkerDecodeRequest {
   format: ImageFormat;
   /** Decode options */
   options?: DecodeOptions;
+  /** Max dimension for post-decode downsample in worker */
+  maxDimension?: number;
 }
 
 export interface WorkerInitCodecRequest {
