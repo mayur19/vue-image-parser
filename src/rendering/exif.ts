@@ -3,6 +3,8 @@
  * Reads EXIF orientation tag from JPEG files for auto-orientation.
  */
 
+import { hasOffscreenCanvas } from '../utils/ssr';
+
 /**
  * EXIF orientation values (1-8).
  * 1 = Normal (no rotation needed)
@@ -110,6 +112,8 @@ function parseExifOrientation(view: DataView, tiffStart: number, maxLength: numb
 
 /**
  * Apply EXIF orientation to RGBA pixel data.
+ * Delegates to the GPU-accelerated OffscreenCanvas path when available,
+ * falling back to the pixel-by-pixel implementation otherwise.
  * Returns new pixel data with corrected orientation and new dimensions.
  */
 export function applyOrientation(
@@ -122,6 +126,84 @@ export function applyOrientation(
     return { data, width, height };
   }
 
+  if (hasOffscreenCanvas()) {
+    return applyOrientationViaCanvas(data, width, height, orientation);
+  }
+
+  return applyOrientationPixelByPixel(data, width, height, orientation);
+}
+
+/**
+ * GPU-accelerated orientation using OffscreenCanvas transforms.
+ * Only called when OffscreenCanvas is available.
+ */
+function applyOrientationViaCanvas(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  orientation: ExifOrientation,
+): { data: Uint8ClampedArray; width: number; height: number } {
+  const swapDimensions = orientation >= 5;
+  const outWidth  = swapDimensions ? height : width;
+  const outHeight = swapDimensions ? width  : height;
+
+  // Source canvas — upload original pixels
+  const srcCanvas = new OffscreenCanvas(width, height);
+  const srcCtx = srcCanvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
+  srcCtx.putImageData(new ImageData(data, width, height), 0, 0);
+
+  // Output canvas — apply CSS-like transform then blit
+  const outCanvas = new OffscreenCanvas(outWidth, outHeight);
+  const outCtx = outCanvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
+
+  switch (orientation) {
+    case 2:
+      outCtx.translate(width, 0);
+      outCtx.scale(-1, 1);
+      break;
+    case 3:
+      outCtx.translate(width, height);
+      outCtx.scale(-1, -1);
+      break;
+    case 4:
+      outCtx.translate(0, height);
+      outCtx.scale(1, -1);
+      break;
+    case 5:
+      outCtx.rotate(Math.PI / 2);
+      outCtx.scale(1, -1);
+      break;
+    case 6:
+      outCtx.translate(outWidth, 0);
+      outCtx.rotate(Math.PI / 2);
+      break;
+    case 7:
+      outCtx.translate(outWidth, outHeight);
+      outCtx.rotate(Math.PI / 2);
+      outCtx.scale(-1, 1);
+      break;
+    case 8:
+      outCtx.translate(0, outHeight);
+      outCtx.rotate(-Math.PI / 2);
+      break;
+  }
+
+  outCtx.drawImage(srcCanvas, 0, 0);
+
+  const imageData = outCtx.getImageData(0, 0, outWidth, outHeight);
+  return { data: imageData.data, width: outWidth, height: outHeight };
+}
+
+/**
+ * CPU pixel-by-pixel orientation fallback.
+ * Used when OffscreenCanvas is unavailable (SSR / older environments).
+ */
+function applyOrientationPixelByPixel(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  orientation: ExifOrientation,
+): { data: Uint8ClampedArray; width: number; height: number } {
   // For orientations 5-8, width and height are swapped
   const swapDimensions = orientation >= 5;
   const outWidth = swapDimensions ? height : width;
@@ -145,7 +227,7 @@ export function applyOrientation(
       }
 
       const dstIdx = (dstY * outWidth + dstX) * 4;
-      result[dstIdx] = data[srcIdx];
+      result[dstIdx]     = data[srcIdx];
       result[dstIdx + 1] = data[srcIdx + 1];
       result[dstIdx + 2] = data[srcIdx + 2];
       result[dstIdx + 3] = data[srcIdx + 3];
