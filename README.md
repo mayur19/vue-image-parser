@@ -1,136 +1,245 @@
-# vue-image-parser 🖼️⚡️
+# vue-image-parser
 
-> A hyper-optimized, universal, WASM-accelerated image rendering engine for Vue 3.
+[![npm version](https://img.shields.io/npm/v/vue-image-parser.svg)](https://www.npmjs.com/package/vue-image-parser)
+[![CI](https://github.com/mayur19/vue-image-parser/actions/workflows/ci.yml/badge.svg)](https://github.com/mayur19/vue-image-parser/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-`vue-image-parser` is a production-grade library designed to effortlessly handle and render modern, next-generation image formats (like **HEIC** and **AVIF**) alongside standard formats (JPEG, PNG, WebP) in any browser. It was built specifically to solve the massive performance and compatibility headaches that come with building next-generation web platforms.
+Universal image rendering engine for Vue 3 — supports JPEG, PNG, WebP, GIF, HEIC, and AVIF with WASM fallback and zero main-thread blocking.
 
----
+## Features
 
-## 🚀 Why use `vue-image-parser` over others?
+- **Format Detection** — Binary signature detection (never file extensions) for JPEG, PNG, WebP, GIF, HEIC, HEIF, AVIF
+- **Capability Probing** — Pixel-verified native decode testing to determine browser support
+- **WASM Fallback** — Automatic fallback to libheif-js for HEIC/AVIF on unsupported browsers
+- **Web Worker Decoding** — Decode off the main thread via a pre-spawned worker pool
+- **EXIF Auto-Orient** — Automatic JPEG EXIF orientation handling
+- **GPU Rendering** — Uses ImageBitmap + drawImage for GPU-accelerated canvas rendering
+- **Vue 3 Integration** — `useImage` composable and `<UniversalImage>` component
+- **SSR Safe** — All browser APIs guarded for Nuxt/SSR environments
+- **Tree-Shakable** — ESM-only with `sideEffects: false`
 
-Most existing image parsers or Vue wrapper libraries suffer from naive detection and main-thread blocking. Here is how `vue-image-parser` is architected for maximum performance:
-
-### 1. Pixel-Verified Native Routing (Zero False Positives)
-Usually, formats are tested by injecting an `<img>` tag into the DOM and waiting for the `onload` event. This is dangerously flawed: many browsers (especially WebViews) will fire `onload` but render an empty `0x0` transparent box or a broken layout. 
-**Our engine runs actual 2x2 byte-level pixel probes via `createImageBitmap` and reads the Canvas output byte-by-byte**. If the colors don't match exactly, we know the browser natively failed, and we automatically fallback to our internal WASM decode engine. Probe results are heavily cached via `IndexedDB` with browser fingerprinting so it only checks once per device.
-
-### 2. Off-Main-Thread Execution (Jank-Free)
-Heavy tasks like decoding HEIC or AVIF binaries using WASM traditionally block the main UI thread, causing CSS animations to stutter and tabs to freeze. 
-**We pushed everything to Web Workers.** Decoding requests are placed into a tunable, priority-based `TaskQueue` monitored by a `WorkerPool`. Your UI never locks up, no matter how massive the image is.
-
-### 3. Zero-Copy Memory Management
-Javascript memory management can be brutal when handling raw RGBA binary data. If an 8K image is parsed, serializing it back to the main thread via JSON/Cloning destroys RAM. 
-Our workers use **Zero-copy ArrayBuffer Transfers**. Web Worker results are instantly transferred to the main thread via memory-ownership swapping, avoiding the memory duplication that plagues older libraries.
-
-### 4. Lazy-Loaded WASM
-WASM binaries are huge. `libheif-js` and AVIF libraries can add MBs to your bundle. 
-**We dynamically lazy-load WASM binaries only if required**. If a user on Safari visits your site, Safari natively decodes HEIC. The user downloads 0 bytes of WASM. If a user on Chrome visits with a HEIC, we fallback and dynamically fetch the WASM chunk in the background via the worker. This keeps the core bundle microscopic.
-
-### 5. Smart Object Fitting & Auto-Orientation 
-Exif data parsing is built directly into the parsing layer, meaning your iPhone vertical shots won't show up entirely sideways. Plus, the `<UniversalImage />` component leverages native `<canvas>` hardware-accelerated drawing combined with CSS-like `object-fit: cover` and `contain` fallbacks for when native `<image>` URLs fail.
-
----
-
-## 📦 Installation
+## Installation
 
 ```bash
 npm install vue-image-parser
 ```
-*(Peer dependency: `vue@^3.0.0`)*
 
----
+HEIC/AVIF support via libheif-js is included out of the box.
 
-## 🛠️ Getting Started
+## Quick Start
 
-### 1. Plugin Registration
-Register the plugin globally to get access to `<UniversalImage />` everywhere.
+### Composable
 
-```typescript
-import { createApp } from 'vue';
-import App from './App.vue';
-import { ImageParserPlugin } from 'vue-image-parser';
-
-const app = createApp(App);
-app.use(ImageParserPlugin);
-app.mount('#app');
-```
-
----
-
-### 2. Declarative Usage (`UniversalImage`)
-The simplest way to use the library is via the `UniversalImage` component. It behaves exactly like an `<img>` tag, but works cleanly with HEIC, AVIF, and guarantees loading/error states.
-
-```html
-<template>
-  <!-- Renders seamlessly on all browsers! -->
-  <UniversalImage 
-    src="https://example.com/high-res-photo.heic" 
-    alt="A stunning sunset"
-    width="400"
-    height="300"
-    fit="cover"
-    background="#e0e0e0"
-    lazy
-  />
-</template>
-```
-
-#### **Props:**
-* `src`: The source of the image (`File`, `Blob`, `ArrayBuffer`, or `URL string`).
-* `lazy`: Set to `true` to utilize an internal `IntersectionObserver`. Images will not decode, load, or fetch WASM until they are scrolled into view.
-* `fit`: Controls internal canvas rendering (`cover`, `contain`, `fill`, etc).
-* `fallbackSrc`: Provides a fallback static URL if decoding completely throws.
-
----
-
-### 3. Programmatic Usage (`useImage`)
-For complete reactivity and control (for example, reading metadata or tracking progress), utilize the `useImage` composable!
-
-```html
+```vue
 <script setup>
-import { useImage } from 'vue-image-parser';
+import { useImage } from 'vue-image-parser'
 
-const fileInput = ref(null);
-const selectedFile = ref(null);
-
-// Automatically decodes whenever selectedFile changes
-const { loading, decoded, error, format } = useImage(selectedFile);
-
-function onFileSelect(event) {
-  selectedFile.value = event.target.files[0];
-}
+const { image, loading, error } = useImage('/photos/example.heic')
 </script>
 
 <template>
-  <input type="file" @change="onFileSelect" />
-
-  <div v-if="loading">Processing image on the background thread...</div>
-  
-  <div v-else-if="error">
-    Failed to decode: {{ error.message }}
-  </div>
-
-  <div v-else-if="decoded">
-    <p>Format detected: {{ format }}</p>
-    <p>Resolution: {{ decoded.width }} x {{ decoded.height }}</p>
-    <!-- Use UniversalImage by feeding it the raw file, or extract base64 -->
-  </div>
+  <div v-if="loading">Loading...</div>
+  <div v-else-if="error">{{ error.message }}</div>
+  <canvas v-else ref="canvas" />
 </template>
 ```
 
----
+### Component
 
-## ⚖️ Performance Tips for Production
+```vue
+<script setup>
+import { UniversalImage } from 'vue-image-parser'
+</script>
 
-If you are rendering massive galleries (50+ formats at once), follow these rules:
-1. **Always use `lazy`**: `<UniversalImage lazy />` leverages IntersectionObservers so memory pools don't stall fetching off-screen WASM tasks.
-2. **Limit Max Dimensions**: By default, full scale decoded images live in RAM. To heavily preserve performance, supply the `maxDimension` parameter when using the low-level Javascript `loadImage()` API to resize the array buffers natively instead of resizing gigantic buffers in vue reactivity logs.
+<template>
+  <UniversalImage src="/photos/example.avif" :max-dimension="1024" />
+</template>
+```
 
-## 🤝 Contributing / Architecture
-Check the inner architecture within `/src`.
-* `capability` - Evaluates the browser rendering specs using 2x2 binary probe arrays. 
-* `codecs` - Contains logic for evaluating native browser components and falling back on tree-shakable `.wasm` wrappers.
-* `workers` - Controls multi-threading logic to avoid blocking the user device UI.
+### Plugin (global registration)
+
+```ts
+import { createApp } from 'vue'
+import { ImageParserPlugin } from 'vue-image-parser'
+
+const app = createApp(App)
+app.use(ImageParserPlugin)
+```
+
+### Programmatic API
+
+```ts
+import { loadImage, renderImage, detectFormat, disposeEngine } from 'vue-image-parser'
+
+// Load and decode
+const decoded = await loadImage('/photo.heic', {
+  strategy: 'auto',    // 'auto' | 'native' | 'wasm'
+  maxDimension: 2048,
+  timeout: 30000,
+})
+
+// Render to canvas
+const canvas = document.getElementById('canvas') as HTMLCanvasElement
+renderImage(canvas, decoded, { fit: 'contain' })
+
+// Detect format without decoding
+const format = detectFormat(buffer)
+
+// Clean up when done
+decoded.dispose()
+disposeEngine()
+```
+
+## API Reference
+
+### Core Functions
+
+| Function | Description |
+|----------|-------------|
+| `loadImage(source, options?)` | Load and decode an image from URL, File, Blob, or ArrayBuffer |
+| `renderImage(target, image, options?)` | Render a decoded image onto a canvas or HTML element |
+| `detectFormat(buffer)` | Detect image format from binary signature |
+| `detectFormatFromBlob(blob)` | Detect format from a Blob (reads first 64 bytes) |
+| `warmup(formats)` | Pre-initialize WASM codecs for given formats |
+| `disposeEngine()` | Release all resources (worker pool, codecs, registries) |
+
+### LoadOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `strategy` | `'auto' \| 'native' \| 'wasm'` | `'auto'` | Decoding strategy |
+| `signal` | `AbortSignal` | — | Cancellation signal |
+| `timeout` | `number` | `30000` | Timeout in milliseconds |
+| `maxDimension` | `number` | — | Max width/height for downsampling |
+| `maxFileSize` | `number` | `104857600` | Max file size in bytes (100 MB) |
+| `autoOrient` | `boolean` | `true` | Auto-orient based on EXIF |
+| `onProgress` | `(p: number) => void` | — | Progress callback (0.0-1.0) |
+
+### RenderOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `fit` | `'contain' \| 'cover' \| 'fill' \| 'none' \| 'scale-down'` | `'contain'` | Object-fit behavior |
+| `width` | `number` | image width | Target width |
+| `height` | `number` | image height | Target height |
+| `background` | `string` | — | Background color for letterboxing |
+| `dpr` | `number` | `devicePixelRatio` | Device pixel ratio |
+
+### Utilities
+
+| Function | Description |
+|----------|-------------|
+| `toDataURL(image, mimeType?)` | Convert decoded image to data URL |
+| `toBlobURL(image, mimeType?)` | Convert decoded image to blob URL |
+| `toImageBitmap(image)` | Convert decoded image to ImageBitmap |
+
+### Error Types
+
+All errors extend `ImageParserError` with a machine-readable `code`:
+
+| Error | Code(s) | When |
+|-------|---------|------|
+| `FormatDetectionError` | `FORMAT_DETECTION_FAILED` | Unrecognized binary signature |
+| `CodecError` | `DECODE_FAILED`, `HEIC_DECODE_FAILED`, `AVIF_DECODE_FAILED` | Decode failure |
+| `FetchError` | `FETCH_FAILED`, `FILE_TOO_LARGE` | Network or file size error |
+| `TimeoutError` | `FETCH_TIMEOUT` | Operation exceeded timeout |
+| `AbortError` | `ABORTED` | Cancelled via AbortSignal |
+| `WorkerError` | `WORKER_CRASHED` | Web Worker failure |
+
+## Supported Formats
+
+| Format | Native | WASM Fallback |
+|--------|--------|---------------|
+| JPEG | All browsers | — |
+| PNG | All browsers | — |
+| GIF | All browsers | — |
+| WebP | All modern browsers | — |
+| HEIC/HEIF | Safari 17+ | libheif-js |
+| AVIF | Chrome 85+, Firefox 93+ | libheif-js |
+
+## Browser Compatibility
+
+- Chrome 85+
+- Firefox 93+
+- Safari 16.4+ (OffscreenCanvas)
+- Edge 85+
+
+Older browsers work with reduced functionality (main-thread decoding, no OffscreenCanvas).
+
+## Memory Management
+
+Decoded images hold GPU resources (ImageBitmaps) and pixel buffers. Always dispose them when done:
+
+```ts
+const decoded = await loadImage('/photo.heic')
+try {
+  renderImage(canvas, decoded)
+} finally {
+  decoded.dispose()
+}
+```
+
+In long-lived apps (SPAs), call `disposeEngine()` when your image-handling view is torn down to release the worker pool and codec instances:
+
+```ts
+import { onBeforeUnmount } from 'vue'
+import { disposeEngine } from 'vue-image-parser'
+
+onBeforeUnmount(() => {
+  disposeEngine()
+})
+```
+
+The `useImage()` composable handles disposal automatically on component unmount.
+
+## Error Handling
+
+All errors extend `ImageParserError` with a machine-readable `code` for programmatic handling:
+
+```ts
+import { loadImage, ImageParserError, ErrorCodes } from 'vue-image-parser'
+
+try {
+  const decoded = await loadImage(url)
+} catch (error) {
+  if (error instanceof ImageParserError) {
+    switch (error.code) {
+      case ErrorCodes.FORMAT_DETECTION_FAILED:
+        console.warn('Unsupported image format')
+        break
+      case ErrorCodes.FETCH_TIMEOUT:
+        console.warn('Image took too long to load')
+        break
+      case ErrorCodes.FILE_TOO_LARGE:
+        console.warn('Image exceeds size limit')
+        break
+      default:
+        console.error('Image error:', error.message)
+    }
+  }
+}
+```
+
+## SSR / Nuxt
+
+All browser APIs are guarded behind `isBrowser()` checks. Use `onMounted()` or `<ClientOnly>` to defer image operations:
+
+```vue
+<script setup>
+import { onMounted } from 'vue'
+import { loadImage } from 'vue-image-parser'
+
+onMounted(async () => {
+  const decoded = await loadImage('/photo.heic')
+  // ...
+})
+</script>
+```
+
+## Contributing
+
+Contributions are welcome! Please read the [Contributing Guide](./CONTRIBUTING.md) and [Code of Conduct](./CODE_OF_CONDUCT.md) before submitting a PR.
 
 ## License
-MIT
+
+[MIT](./LICENSE)
