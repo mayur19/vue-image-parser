@@ -60,7 +60,7 @@
     "url": "https://github.com/mayur19/vue-image-parser/issues"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "libheif-js": "^1.18.0"
