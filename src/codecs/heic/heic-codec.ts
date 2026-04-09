@@ -8,6 +8,9 @@ import { ImageFormat as Format } from '../../types/image';
 import { CodecError } from '../../errors/errors';
 import { ErrorCodes } from '../../errors/codes';
 
+/** Maximum pixel count to prevent OOM (256 MB of RGBA data = 67M pixels) */
+const MAX_PIXEL_COUNT = 67_108_864; // 256 * 1024 * 1024 / 4
+
 /**
  * HEIC decoder using libheif-js WASM.
  */
@@ -15,7 +18,7 @@ export class HeicCodec implements Codec {
   readonly name = 'heic-wasm';
   readonly formats: ReadonlyArray<ImageFormat> = [Format.HEIC, Format.HEIF];
 
-  private heifModule: any = null;
+  private heifModule: import('libheif-js').LibHeif | null = null;
   private initialized = false;
 
   /**
@@ -28,10 +31,10 @@ export class HeicCodec implements Codec {
     try {
       // Dynamic import for tree-shaking
       const libheif = await import('libheif-js');
-      let mod: any = libheif.default || libheif;
-      if (typeof mod === 'function') {
-        mod = await mod();
-      }
+      const factoryOrModule = libheif.default || libheif;
+      const mod: import('libheif-js').LibHeif = typeof factoryOrModule === 'function'
+        ? await Promise.resolve(factoryOrModule())
+        : factoryOrModule;
       this.heifModule = mod;
       this.initialized = true;
     } catch (error) {
@@ -51,8 +54,10 @@ export class HeicCodec implements Codec {
       await this.init();
     }
 
+    const heif = this.heifModule!;
+
     try {
-      const decoder = new this.heifModule.HeifDecoder();
+      const decoder = new heif.HeifDecoder();
       const data = new Uint8Array(buffer);
       const images = decoder.decode(data);
 
@@ -68,11 +73,18 @@ export class HeicCodec implements Codec {
         throw new Error(`HEIC decoded to invalid dimensions: ${width}×${height}`);
       }
 
+      const pixelCount = width * height;
+      if (pixelCount > MAX_PIXEL_COUNT) {
+        throw new Error(
+          `HEIC dimensions ${width}×${height} (${pixelCount} pixels) exceed maximum allowed ${MAX_PIXEL_COUNT} pixels`,
+        );
+      }
+
       // Get RGBA pixel data
-      const imageData = await new Promise<any>((resolve, reject) => {
+      const imageData = await new Promise<import('libheif-js').HeifDisplayData>((resolve, reject) => {
         image.display(
           { data: new Uint8ClampedArray(width * height * 4), width, height },
-          (displayData: any) => {
+          (displayData) => {
             if (!displayData) reject(new Error('HEIC display processing failed'));
             else resolve(displayData);
           }

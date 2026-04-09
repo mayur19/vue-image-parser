@@ -147,8 +147,8 @@ async function handleDecode(
     const { data: transferable, transfer } = toTransferable(decoded);
 
     // Use postMessage with transfer list for zero-copy
-    (self as any).postMessage(
-      { type: 'decode-result', id, image: transferable } satisfies WorkerResponse,
+    (self as unknown as { postMessage(msg: WorkerResponse, transfer: Transferable[]): void }).postMessage(
+      { type: 'decode-result', id, image: transferable },
       transfer,
     );
   } catch (error) {
@@ -209,7 +209,7 @@ function downsampleInWorker(image: DecodedImage, maxDimension: number): DecodedI
   try {
     const srcCanvas = new OffscreenCanvas(image.width, image.height);
     const srcCtx = srcCanvas.getContext('2d')!;
-    srcCtx.putImageData(new ImageData(image.data as any, image.width, image.height), 0, 0);
+    srcCtx.putImageData(new ImageData(new Uint8ClampedArray(image.data), image.width, image.height), 0, 0);
 
     const dstCanvas = new OffscreenCanvas(scaled.width, scaled.height);
     const dstCtx = dstCanvas.getContext('2d')!;

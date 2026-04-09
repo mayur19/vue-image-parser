@@ -150,7 +150,7 @@ function applyOrientationViaCanvas(
   // Source canvas — upload original pixels
   const srcCanvas = new OffscreenCanvas(width, height);
   const srcCtx = srcCanvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
-  srcCtx.putImageData(new ImageData(data as any, width, height), 0, 0);
+  srcCtx.putImageData(new ImageData(new Uint8ClampedArray(data), width, height), 0, 0);
 
   // Output canvas — apply CSS-like transform then blit
   const outCanvas = new OffscreenCanvas(outWidth, outHeight);

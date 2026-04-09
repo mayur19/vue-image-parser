@@ -26,6 +26,8 @@ import { readExifOrientation, applyOrientation } from '../rendering/exif';
 import { ImageParserError, FormatDetectionError, CodecError, AbortError } from '../errors/errors';
 import { ErrorCodes } from '../errors/codes';
 import { isBrowser, hasWorkerSupport } from '../utils/ssr';
+import { resetCapabilityRegistry } from '../capability/capability-registry';
+import { resetCodecRegistry } from '../codecs/registry';
 
 // ─── Singleton Pool & Codec ────────────────────────────────────
 
@@ -70,6 +72,7 @@ export async function loadImage(
     timeout = 30000,
     strategy = 'auto',
     maxDimension,
+    maxFileSize,
     autoOrient = true,
     onProgress,
   } = options;
@@ -80,7 +83,7 @@ export async function loadImage(
   }
 
   // Step 1: Resolve source to ArrayBuffer
-  const buffer = await resolveSource(source, { signal, timeout, onProgress });
+  const buffer = await resolveSource(source, { signal, timeout, onProgress, maxFileSize });
 
   if (signal?.aborted) throw new AbortError();
 
@@ -136,7 +139,7 @@ export async function loadImage(
   }
 
   // Override format in result (native codec returns Unknown)
-  if ((decoded as any).format === Format.Unknown || !(decoded as any).format) {
+  if (decoded.format === Format.Unknown || !decoded.format) {
     decoded = { ...decoded, format, decodePath };
   }
 
@@ -144,12 +147,14 @@ export async function loadImage(
 }
 
 /**
- * Dispose global resources (worker pool, codecs).
+ * Dispose all global resources (worker pool, codecs, capability + codec registries).
  */
 export function disposeEngine(): void {
   workerPool?.dispose();
   workerPool = null;
   nativeCodec = null;
+  resetCapabilityRegistry();
+  resetCodecRegistry();
 }
 
 /**
@@ -171,19 +176,33 @@ export async function warmup(formats: ImageFormat[]): Promise<void> {
  */
 async function resolveSource(
   source: string | File | Blob | ArrayBuffer,
-  options: { signal?: AbortSignal; timeout?: number; onProgress?: (p: number) => void },
+  options: { signal?: AbortSignal; timeout?: number; onProgress?: (p: number) => void; maxFileSize?: number },
 ): Promise<ArrayBuffer> {
+  const maxFileSize = options.maxFileSize;
+
   if (source instanceof ArrayBuffer) {
+    if (maxFileSize && maxFileSize > 0 && source.byteLength > maxFileSize) {
+      throw new ImageParserError(
+        ErrorCodes.FILE_TOO_LARGE,
+        `Buffer size ${source.byteLength} bytes exceeds maximum allowed ${maxFileSize} bytes`,
+      );
+    }
     return source;
   }
 
   if (source instanceof Blob) {
+    if (maxFileSize && maxFileSize > 0 && source.size > maxFileSize) {
+      throw new ImageParserError(
+        ErrorCodes.FILE_TOO_LARGE,
+        `File size ${source.size} bytes exceeds maximum allowed ${maxFileSize} bytes`,
+      );
+    }
     return blobToArrayBuffer(source);
   }
 
   if (typeof source === 'string') {
     // URL or data URI
-    return fetchAsArrayBuffer(source, options);
+    return fetchAsArrayBuffer(source, { ...options, maxFileSize });
   }
 
   throw new ImageParserError(
@@ -208,12 +227,12 @@ async function decodeNative(
     });
     return { ...decoded, format };
   } catch (error) {
-    // Native decode failed — report and fall through to WASM
+    // Native decode failed — report with actual format and fall through to WASM
     if (typeof console !== 'undefined') {
-      console.warn(`[vue-image-parser] Native decode failed for ${format}, falling back to WASM`);
+      console.debug(`[vue-image-parser] Native decode failed for ${format}, falling back to WASM`);
     }
 
-    // Report failure to capability system
+    // Report failure to capability system with the actual format (not Unknown)
     getCapabilityRegistry().onNativeDecodeFailure(
       format,
       error instanceof Error ? error : new Error(String(error)),

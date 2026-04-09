@@ -70,7 +70,7 @@ export class TaskQueue {
   ): Promise<WorkerResponse> {
     return new Promise<WorkerResponse>((resolve, reject) => {
       const id = request.type === 'decode' || request.type === 'init-codec'
-        ? (request as any).id
+        ? (request as { id: string }).id
         : `task-${Date.now()}`;
 
       const task: PendingTask = {

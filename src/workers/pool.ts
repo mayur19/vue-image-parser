@@ -214,7 +214,8 @@ export class WorkerPool {
       return;
     }
 
-    const id = (response as any).id as string;
+    const id = 'id' in response ? (response as { id: string }).id : undefined;
+    if (!id) return;
     const pending = this.pendingRequests.get(id);
     if (pending) {
       this.pendingRequests.delete(id);

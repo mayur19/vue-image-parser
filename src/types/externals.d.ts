@@ -3,17 +3,23 @@
  */
 
 declare module 'libheif-js' {
-  interface HeifImage {
-    get_width(): number;
-    get_height(): number;
-    display(displayData: any, callback: (data: any) => any): any;
+  export interface HeifDisplayData {
+    data: Uint8ClampedArray;
+    width: number;
+    height: number;
   }
 
-  interface HeifDecoder {
+  export interface HeifImage {
+    get_width(): number;
+    get_height(): number;
+    display(displayData: HeifDisplayData, callback: (data: HeifDisplayData | null) => void): void;
+  }
+
+  export interface HeifDecoder {
     decode(data: Uint8Array): HeifImage[];
   }
 
-  interface LibHeif {
+  export interface LibHeif {
     HeifDecoder: new () => HeifDecoder;
   }
 
@@ -22,10 +28,7 @@ declare module 'libheif-js' {
 }
 
 declare module 'libheif-js/wasm-bundle' {
-  export default function(): any;
+  import type { LibHeif } from 'libheif-js';
+  export default function(): LibHeif;
 }
 
-declare module '@jsquash/avif/decode' {
-  export default function decode(buffer: ArrayBuffer): Promise<ImageData>;
-  export function decode(buffer: ArrayBuffer): Promise<ImageData>;
-}

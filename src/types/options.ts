@@ -21,6 +21,8 @@ export interface LoadOptions {
   strategy?: 'native' | 'wasm' | 'auto';
   /** Max dimension — downsample if codec supports it */
   maxDimension?: number;
+  /** Maximum file size in bytes (default: 100 MB). Set to 0 to disable. */
+  maxFileSize?: number;
   /** Auto-orient based on EXIF data (default: true) */
   autoOrient?: boolean;
   /** Callback for progress tracking (0.0–1.0) */

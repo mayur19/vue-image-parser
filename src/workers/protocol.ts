@@ -11,8 +11,9 @@ import type { DecodedImage, ImageFormat } from '../types/image';
  */
 export function serializeError(error: unknown): SerializedError {
   if (error instanceof Error) {
+    const code = 'code' in error && typeof error.code === 'string' ? error.code : 'UNKNOWN';
     return {
-      code: (error as any).code ?? 'UNKNOWN',
+      code,
       message: error.message,
       stack: error.stack,
     };
@@ -28,7 +29,7 @@ export function serializeError(error: unknown): SerializedError {
  */
 export function deserializeError(serialized: SerializedError): Error {
   const error = new Error(serialized.message);
-  (error as any).code = serialized.code;
+  Object.defineProperty(error, 'code', { value: serialized.code, writable: true, enumerable: true });
   if (serialized.stack) error.stack = serialized.stack;
   return error;
 }

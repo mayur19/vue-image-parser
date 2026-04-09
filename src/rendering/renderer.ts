@@ -45,8 +45,10 @@ export function renderImage(
 
   try {
     renderToCanvas(canvas, image, renderOptions);
-    // Clear existing children
-    target.innerHTML = '';
+    // Clear existing children (safe DOM removal — no innerHTML)
+    while (target.firstChild) {
+      target.removeChild(target.firstChild);
+    }
     target.appendChild(canvas);
   } catch (error) {
     throw new ImageParserError(

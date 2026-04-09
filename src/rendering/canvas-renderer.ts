@@ -51,7 +51,7 @@ export function renderToCanvas(
   }
 
   // Create ImageData from decoded RGBA
-  const imageData = new ImageData((image.data as any), image.width, image.height);
+  const imageData = new ImageData(new Uint8ClampedArray(image.data), image.width, image.height);
 
   // Calculate fit dimensions
   const dims = calculateFitDimensions(image.width, image.height, width, height, fit);

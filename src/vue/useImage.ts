@@ -106,7 +106,7 @@ export function useImage(
       error.value = null;
     } catch (err) {
       // Don't report abort as an error
-      if ((err as Error).name === 'AbortError' || (err as any).code === 'ABORTED') {
+      if ((err as Error).name === 'AbortError' || ('code' in (err as object) && (err as { code: string }).code === 'ABORTED')) {
         return;
       }
       error.value = err instanceof Error ? err : new Error(String(err));

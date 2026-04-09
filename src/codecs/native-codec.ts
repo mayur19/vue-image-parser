@@ -120,8 +120,9 @@ export class NativeCodec implements Codec {
         error,
       );
 
-      // Report failure back to capability system
+      // Report failure back to capability system (format unknown at codec level)
       this.onDecodeFailure?.(Format.Unknown, codecError);
+      // Note: loader.ts overrides this with the actual format after catching
 
       throw codecError;
     }

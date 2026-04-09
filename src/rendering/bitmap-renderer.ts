@@ -15,7 +15,7 @@ export async function toImageBitmap(image: DecodedImage): Promise<ImageBitmap | 
   if (!hasCreateImageBitmap()) return null;
 
   try {
-    const imageData = new ImageData((image.data as any), image.width, image.height);
+    const imageData = new ImageData(new Uint8ClampedArray(image.data), image.width, image.height);
     return await createImageBitmap(imageData);
   } catch {
     return null;
@@ -31,7 +31,7 @@ export function toDataURL(image: DecodedImage, mimeType: string = 'image/png'): 
   canvas.width = image.width;
   canvas.height = image.height;
   const ctx = canvas.getContext('2d')!;
-  const imageData = new ImageData((image.data as any), image.width, image.height);
+  const imageData = new ImageData(new Uint8ClampedArray(image.data), image.width, image.height);
   ctx.putImageData(imageData, 0, 0);
   return canvas.toDataURL(mimeType);
 }
@@ -49,7 +49,7 @@ export async function toBlobURL(
   canvas.width = image.width;
   canvas.height = image.height;
   const ctx = canvas.getContext('2d')!;
-  const imageData = new ImageData((image.data as any), image.width, image.height);
+  const imageData = new ImageData(new Uint8ClampedArray(image.data), image.width, image.height);
   ctx.putImageData(imageData, 0, 0);
 
   return new Promise<string>((resolve, reject) => {

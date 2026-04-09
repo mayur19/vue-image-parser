@@ -11,6 +11,16 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
+      exclude: [
+        'src/types/**',
+        'src/workers/decode-worker.ts',
+        'src/vue/**',
+      ],
+      thresholds: {
+        lines: 80,
+        branches: 80,
+        functions: 80,
+      },
     },
   },
   resolve: {

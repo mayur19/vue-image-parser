@@ -9,17 +9,46 @@ export interface FetchOptions {
   signal?: AbortSignal;
   timeout?: number;
   onProgress?: (progress: number) => void;
+  /** Maximum allowed file size in bytes (default: 100 MB) */
+  maxFileSize?: number;
+}
+
+/** Maximum file size in bytes (default 100 MB) */
+const DEFAULT_MAX_FILE_SIZE = 100 * 1024 * 1024;
+
+/** Protocols allowed for fetch */
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
+
+/**
+ * Validate that a URL uses a safe protocol.
+ * Rejects javascript:, file:, and other non-HTTP(S) protocols.
+ */
+function validateUrl(url: string): void {
+  try {
+    const parsed = new URL(url, 'https://placeholder.invalid');
+    if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
+      throw new FetchError(
+        ErrorCodes.INVALID_INPUT,
+        `Unsafe URL protocol: ${parsed.protocol} — only http:, https:, and data: are allowed`,
+      );
+    }
+  } catch (error) {
+    if (error instanceof FetchError) throw error;
+    // Relative URLs are OK — they resolve against the page origin
+  }
 }
 
 /**
  * Fetch a URL and return the response as an ArrayBuffer.
- * Supports timeout, abort, and progress tracking.
+ * Supports timeout, abort, progress tracking, and file size limits.
  */
 export async function fetchAsArrayBuffer(
   url: string,
   options: FetchOptions = {},
 ): Promise<ArrayBuffer> {
-  const { timeout = 30000, signal, onProgress } = options;
+  const { timeout = 30000, signal, onProgress, maxFileSize = DEFAULT_MAX_FILE_SIZE } = options;
+
+  validateUrl(url);
 
   // Create timeout abort if needed
   const controller = new AbortController();
@@ -44,15 +73,31 @@ export async function fetchAsArrayBuffer(
       );
     }
 
-    // If progress tracking requested and content-length available
-    if (onProgress && response.body) {
-      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-      if (contentLength > 0) {
-        return readStreamWithProgress(response.body, contentLength, onProgress);
-      }
+    // Check Content-Length against max file size
+    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    if (maxFileSize > 0 && contentLength > maxFileSize) {
+      throw new FetchError(
+        ErrorCodes.FILE_TOO_LARGE,
+        `File size ${contentLength} bytes exceeds maximum allowed ${maxFileSize} bytes`,
+      );
     }
 
-    return await response.arrayBuffer();
+    // If progress tracking requested and content-length available
+    if (onProgress && response.body && contentLength > 0) {
+      return readStreamWithProgress(response.body, contentLength, onProgress, maxFileSize);
+    }
+
+    const buffer = await response.arrayBuffer();
+
+    // Validate actual size (Content-Length may be missing)
+    if (maxFileSize > 0 && buffer.byteLength > maxFileSize) {
+      throw new FetchError(
+        ErrorCodes.FILE_TOO_LARGE,
+        `File size ${buffer.byteLength} bytes exceeds maximum allowed ${maxFileSize} bytes`,
+      );
+    }
+
+    return buffer;
   } catch (error) {
     if (error instanceof ImageParserError) throw error;
 
@@ -78,11 +123,13 @@ import { ImageParserError } from '../errors/errors';
 
 /**
  * Read a ReadableStream with progress tracking.
+ * Enforces maxFileSize on the actual accumulated bytes (not just Content-Length header).
  */
 async function readStreamWithProgress(
   body: ReadableStream<Uint8Array>,
   totalBytes: number,
   onProgress: (progress: number) => void,
+  maxFileSize: number,
 ): Promise<ArrayBuffer> {
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
@@ -94,6 +141,15 @@ async function readStreamWithProgress(
 
     chunks.push(value);
     receivedBytes += value.byteLength;
+
+    if (maxFileSize > 0 && receivedBytes > maxFileSize) {
+      reader.cancel();
+      throw new FetchError(
+        ErrorCodes.FILE_TOO_LARGE,
+        `Streaming body size ${receivedBytes} bytes exceeds maximum allowed ${maxFileSize} bytes`,
+      );
+    }
+
     onProgress(Math.min(receivedBytes / totalBytes, 1.0));
   }
 
