@@ -1,6 +1,6 @@
 {
   "name": "vue-image-parser",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Universal image rendering engine for Vue — supports JPEG, PNG, WebP, GIF, HEIC, AVIF with WASM fallback and zero main-thread blocking",
   "type": "module",
   "main": "./dist/index.js",
