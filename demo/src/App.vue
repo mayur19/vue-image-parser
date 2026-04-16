@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import ImageCard from './components/ImageCard.vue'
+import ZoomBugRepro from './components/ZoomBugRepro.vue'
 
 const isDragging = ref(false)
 const files = ref<File[]>([])
+const showRepro = ref(false)
 
 function onDragEnter(e: DragEvent) {
   e.preventDefault()
@@ -72,10 +74,23 @@ function appendFiles(newFiles: File[]) {
         <ImageCard v-for="(file, i) in files" :key="file.name + i" :file="file" />
       </div>
     </div>
+
+    <div class="repro-toggle">
+      <button type="button" class="btn ms-btn" @click="showRepro = !showRepro">
+        {{ showRepro ? 'Hide' : 'Show' }} fit/zoom repro
+      </button>
+    </div>
+    <ZoomBugRepro v-if="showRepro" />
   </main>
 </template>
 
 <style scoped>
+.repro-toggle {
+  display: flex;
+  justify-content: center;
+  margin: 2rem 0 1rem;
+}
+
 .hero {
   text-align: center;
   padding: 3rem 0;

@@ -6,7 +6,7 @@
  * Supports JPEG, PNG, WebP, GIF, HEIC, AVIF with automatic
  * native vs WASM codec selection.
  */
-import { ref, watch, onMounted, onBeforeUnmount, toRef, computed } from 'vue';
+import { ref, watch, onMounted, onBeforeUnmount, toRef, computed, nextTick } from 'vue';
 import { useImage } from './useImage';
 import { renderImage } from '../rendering/renderer';
 import { toBlobURL } from '../rendering/bitmap-renderer';
@@ -96,11 +96,17 @@ watch(decoded, async (image) => {
       URL.revokeObjectURL(blobUrl);
     }
   } catch (err) {
-    // Fallback to canvas rendering if blob URL fails
-    if (canvasRef.value) {
+    // Fallback to canvas rendering if blob URL fails. Wait a tick so the
+    // canvas element is mounted and laid out — renderToCanvas falls back to
+    // getBoundingClientRect() when options.width/height are omitted.
+    await nextTick();
+    if (canvasRef.value && decoded.value === image) {
+      const rect = containerRef.value?.getBoundingClientRect();
       const renderOptions: RenderOptions = {
         fit: props.fit,
         background: props.background,
+        width: rect?.width || image.width,
+        height: rect?.height || image.height,
       };
       renderImage(canvasRef.value, image, renderOptions);
     }
@@ -140,14 +146,23 @@ onBeforeUnmount(() => {
   revokePreviousBlobUrl();
 });
 
-// Computed styles
-const containerStyle = computed(() => ({
-  width: typeof props.width === 'number' ? `${props.width}px` : props.width,
-  height: typeof props.height === 'number' ? `${props.height}px` : props.height,
-  position: 'relative' as const,
-  overflow: 'hidden' as const,
-  display: 'inline-block' as const,
-}));
+// Computed styles.
+// Note: width/height are only emitted when the caller actually supplied them.
+// Otherwise we let the consumer's own CSS (or the scoped default below) size
+// the container so `object-fit` operates on a well-defined box.
+const containerStyle = computed(() => {
+  const style: Record<string, string> = {
+    position: 'relative',
+    overflow: 'hidden',
+  };
+  if (props.width !== undefined) {
+    style.width = typeof props.width === 'number' ? `${props.width}px` : props.width;
+  }
+  if (props.height !== undefined) {
+    style.height = typeof props.height === 'number' ? `${props.height}px` : props.height;
+  }
+  return style;
+});
 
 const imgStyle = computed(() => ({
   width: '100%',
@@ -211,6 +226,9 @@ const imgStyle = computed(() => ({
 <style scoped>
 .universal-image {
   background: transparent;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .universal-image__placeholder {

@@ -16,8 +16,8 @@ export interface FetchOptions {
 /** Maximum file size in bytes (default 100 MB) */
 const DEFAULT_MAX_FILE_SIZE = 100 * 1024 * 1024;
 
-/** Protocols allowed for fetch */
-const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
+/** Protocols allowed for fetch. blob: URLs are same-origin object URLs created by URL.createObjectURL. */
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'data:', 'blob:']);
 
 /**
  * Validate that a URL uses a safe protocol.
@@ -29,7 +29,7 @@ function validateUrl(url: string): void {
     if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
       throw new FetchError(
         ErrorCodes.INVALID_INPUT,
-        `Unsafe URL protocol: ${parsed.protocol} — only http:, https:, and data: are allowed`,
+        `Unsafe URL protocol: ${parsed.protocol} — only http:, https:, data:, and blob: are allowed`,
       );
     }
   } catch (error) {

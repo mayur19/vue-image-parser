@@ -10,53 +10,65 @@ import { CanvasPool } from './canvas-pool';
 
 const tempCanvasPool = new CanvasPool(2);
 
+function resolveContainerDimensions(
+  canvas: HTMLCanvasElement,
+  image: DecodedImage,
+  options: RenderOptions,
+): { width: number; height: number } {
+  if (options.width !== undefined && options.height !== undefined) {
+    return { width: options.width, height: options.height };
+  }
+
+  const rect =
+    typeof canvas.getBoundingClientRect === 'function'
+      ? canvas.getBoundingClientRect()
+      : { width: 0, height: 0 };
+
+  const width = options.width ?? (rect.width || image.width);
+  const height = options.height ?? (rect.height || image.height);
+  return { width, height };
+}
+
 /**
  * Render a DecodedImage onto a Canvas element.
+ *
+ * The renderer owns the drawing buffer (canvas.width / canvas.height) and
+ * never touches canvas.style — layout is always the caller's responsibility.
  */
 export function renderToCanvas(
   canvas: HTMLCanvasElement,
   image: DecodedImage,
   options: RenderOptions = {},
 ): void {
-  const {
-    width = image.width,
-    height = image.height,
-    fit = 'contain',
-    background,
-    dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1,
-  } = options;
+  const { width, height } = resolveContainerDimensions(canvas, image, options);
+  const fit = options.fit ?? 'contain';
+  const background = options.background;
+  const dpr = options.dpr ?? (typeof window !== 'undefined' ? window.devicePixelRatio : 1);
 
-  // Set canvas dimensions accounting for device pixel ratio
-  canvas.width = width * dpr;
-  canvas.height = height * dpr;
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
+  canvas.width = Math.max(1, Math.round(width * dpr));
+  canvas.height = Math.max(1, Math.round(height * dpr));
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.scale(dpr, dpr);
 
-  // Fill background if specified
   if (background) {
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, width, height);
   }
 
-  // Fast path: if decoded image has a live ImageBitmap, use drawImage directly
   if (image.bitmap) {
     const dims = calculateFitDimensions(image.width, image.height, width, height, fit);
     ctx.drawImage(image.bitmap, dims.x, dims.y, dims.width, dims.height);
     return;
   }
 
-  // Create ImageData from decoded RGBA
   const imageData = new ImageData(new Uint8ClampedArray(image.data), image.width, image.height);
-
-  // Calculate fit dimensions
   const dims = calculateFitDimensions(image.width, image.height, width, height, fit);
 
-  // For non-1:1 rendering, we need a temp canvas
   if (dims.width !== image.width || dims.height !== image.height) {
     const tempCanvas = tempCanvasPool.acquire(image.width, image.height);
     const tempCtx = tempCanvas.getContext('2d')!;

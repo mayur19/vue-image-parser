@@ -86,6 +86,14 @@ describe('fetchAsArrayBuffer', () => {
     expect(result).toBeDefined();
   });
 
+  it('allows blob: URLs (from URL.createObjectURL)', async () => {
+    const expected = new Uint8Array([1, 2, 3]).buffer;
+    mockFetch(expected);
+
+    const result = await fetchAsArrayBuffer('blob:http://localhost/abc-123');
+    expect(result.byteLength).toBe(3);
+  });
+
   it('allows relative URLs', async () => {
     const expected = new Uint8Array([1]).buffer;
     mockFetch(expected);

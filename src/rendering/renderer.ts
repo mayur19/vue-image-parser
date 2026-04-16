@@ -30,7 +30,10 @@ export function renderImage(
     return;
   }
 
-  // For non-canvas elements, create a canvas inside
+  // For non-canvas elements, create a canvas inside.
+  // The canvas is sized via CSS (100% of container); the drawing buffer is
+  // handled by renderToCanvas based on the explicit width/height we pass in
+  // from the container's bounding rect.
   const canvas = document.createElement('canvas');
   canvas.style.display = 'block';
   canvas.style.width = '100%';
@@ -38,9 +41,9 @@ export function renderImage(
 
   const rect = target.getBoundingClientRect();
   const renderOptions: RenderOptions = {
+    ...options,
     width: options.width ?? (rect.width || image.width),
     height: options.height ?? (rect.height || image.height),
-    ...options,
   };
 
   try {
